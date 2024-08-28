@@ -1,5 +1,6 @@
 import os
 import bpy
+from . import remote_exec
 from .. import bfu_export
 from .. import bfu_write_text
 from .. import bfu_basics
@@ -12,7 +13,6 @@ from .. import bps
 from .. import bfu_collision
 from .. import bfu_socket
 from .. import bfu_assets_manager
-
 
 
 class BFU_PT_Export(bpy.types.Panel):
@@ -520,6 +520,12 @@ class BFU_PT_Export(bpy.types.Panel):
             bfu_export.bfu_export_asset.process_export(self)
             bfu_write_text.WriteAllTextFiles()
 
+            if scene.autoAssetsImport:
+                bpy.ops.object.copy_importassetscript_command()
+
+            if scene.autoSequencerImport:
+                bpy.ops.object.copy_importsequencerscript_command()
+                
             self.report(
                 {'INFO'},
                 "Export of " + str(len(scene.UnrealExportedAssetsList)) + " asset(s) has been finalized in " + counter.get_str_time() + " Look in console for more info.")
@@ -540,31 +546,41 @@ class BFU_PT_Export(bpy.types.Panel):
             return {'FINISHED'}
 
     class BFU_OT_CopyImportAssetScriptCommand(bpy.types.Operator):
-        bl_label = "Copy import script (Assets)"
+        bl_label = "Send Assets"
         bl_idname = "object.copy_importassetscript_command"
-        bl_description = "Copy Import Asset Script command"
+        bl_description = "Send to Unreal Engine with Remote Execution"
 
         def execute(self, context):
-            scene = context.scene
-            bfu_basics.setWindowsClipboard(bfu_utils.GetImportAssetScriptCommand())
-            self.report(
-                {'INFO'},
-                "command for "+scene.bfu_file_import_asset_script_name +
-                " copied")
+        
+            scene = context.scene      
+            fileName = scene.bfu_file_import_asset_script_name
+            absdirpath = bpy.path.abspath(scene.bfu_export_other_file_path)
+            fullpath = os.path.join(absdirpath, fileName)
+            command = fullpath.replace("\\", "\\\\")
+            
+            bfu_basics.setWindowsClipboard(fullpath)
+            
+            remote_exec.call_in_background(command)
             return {'FINISHED'}
+            
 
     class BFU_OT_CopyImportSequencerScriptCommand(bpy.types.Operator):
-        bl_label = "Copy import script (Sequencer)"
+        bl_label = "Send Sequencer"
         bl_idname = "object.copy_importsequencerscript_command"
-        bl_description = "Copy Import Sequencer Script command"
+        bl_description = "Send to Unreal Engine with Remote Execution"
 
         def execute(self, context):
+        
             scene = context.scene
-            bfu_basics.setWindowsClipboard(bfu_utils.GetImportSequencerScriptCommand())
-            self.report(
-                {'INFO'},
-                "command for "+scene.bfu_file_import_sequencer_script_name +
-                " copied")
+            
+            fileName = scene.bfu_file_import_sequencer_script_name
+            absdirpath = bpy.path.abspath(scene.bfu_export_other_file_path)
+            fullpath = os.path.join(absdirpath, fileName)
+            command = fullpath.replace("\\", "\\\\")
+            
+            bfu_basics.setWindowsClipboard(command)
+            
+            remote_exec.call_in_background(command)
             return {'FINISHED'}
 
     # Categories :
@@ -642,7 +658,19 @@ class BFU_PT_Export(bpy.types.Panel):
             " like parameter or anim tracks"),
         default=True
         )
+        
+    bpy.types.Scene.autoAssetsImport = bpy.props.BoolProperty(
+        name="Assets Import",
+        description="Auto Assets Import in Unreal Engine after Export",
+        default=True
+    )
 
+    bpy.types.Scene.autoSequencerImport = bpy.props.BoolProperty(
+        name="Sequencer Import",
+        description="Auto Sequencer Import in Unreal Engine after Export",
+        default=False
+    )
+    
     # exportProperty
     bpy.types.Scene.bfu_export_selection_filter = bpy.props.EnumProperty(
         name="Selection filter",
@@ -782,20 +810,35 @@ class BFU_PT_Export(bpy.types.Panel):
             exportButton = layout.row()
             exportButton.scale_y = 2.0
             exportButton.operator("object.exportforunreal", icon='EXPORT')
-
-        scene.bfu_script_tool_expanded.draw(layout)
-        if scene.bfu_script_tool_expanded.is_expend():
+            
+            
+            exportbools = layout.row()
+            exportbools.prop(scene, "autoAssetsImport")
+            exportbools.prop(scene, "autoSequencerImport")
+            
             if addon_prefs.useGeneratedScripts:
                 copyButton = layout.row()
                 copyButton.operator("object.copy_importassetscript_command")
                 copyButton.operator("object.copy_importsequencerscript_command")
-                layout.label(text="Click on one of the buttons to copy the import command.", icon='INFO')
-                layout.label(text="Then paste it into the cmd console of unreal.")
-                layout.label(text="You need activate python plugins in Unreal Engine.")
-
+                
+            layout.operator("bfu.open_export_folder", text="Open Export Folder")
+                
+    class OpenExportFolder(bpy.types.Operator):
+        """Open the Export Folder"""
+        bl_idname = "bfu.open_export_folder"
+        bl_label = "Open Export Folder"
+        
+        
+        def execute(self, context):
+            scene = context.scene
+            export_folder = bpy.path.abspath(scene.bfu_export_other_file_path)
+            #export_folder = absdirpath.replace("\\", "\\\\")
+            if os.path.exists(export_folder):
+                os.startfile(export_folder)  
             else:
-                layout.label(text='(Generated scripts are deactivated.)')
-
+                self.report({'ERROR'}, "Export folder does not exist.")
+            return {'FINISHED'}
+            
 # -------------------------------------------------------------------
 #   Register & Unregister
 # -------------------------------------------------------------------
@@ -815,6 +858,7 @@ classes = (
     BFU_PT_Export.BFU_OT_ExportForUnrealEngineButton,
     BFU_PT_Export.BFU_OT_CopyImportAssetScriptCommand,
     BFU_PT_Export.BFU_OT_CopyImportSequencerScriptCommand,
+    BFU_PT_Export.OpenExportFolder,
 )
 
 

@@ -558,8 +558,6 @@ class BFU_PT_Export(bpy.types.Panel):
             fullpath = os.path.join(absdirpath, fileName)
             command = fullpath.replace("\\", "\\\\")
             
-            bfu_basics.setWindowsClipboard(fullpath)
-            
             remote_exec.call_in_background(command)
             return {'FINISHED'}
             
@@ -577,8 +575,6 @@ class BFU_PT_Export(bpy.types.Panel):
             absdirpath = bpy.path.abspath(scene.bfu_export_other_file_path)
             fullpath = os.path.join(absdirpath, fileName)
             command = fullpath.replace("\\", "\\\\")
-            
-            bfu_basics.setWindowsClipboard(command)
             
             remote_exec.call_in_background(command)
             return {'FINISHED'}
@@ -832,7 +828,6 @@ class BFU_PT_Export(bpy.types.Panel):
         def execute(self, context):
             scene = context.scene
             export_folder = bpy.path.abspath(scene.bfu_export_other_file_path)
-            #export_folder = absdirpath.replace("\\", "\\\\")
             if os.path.exists(export_folder):
                 os.startfile(export_folder)  
             else:
